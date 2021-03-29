@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/rsa"
 	"fmt"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/urfave/cli"
 	"io"
 	"io/ioutil"
@@ -9,9 +11,16 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"time"
 )
 
 const address = "127.0.0.1"
+
+const (
+	processing cluster = iota
+	services
+	monitoring
+)
 
 var (
 	Trace   *log.Logger
@@ -20,31 +29,60 @@ var (
 	Error   *log.Logger
 )
 
+type cluster int
+
 type service struct {
-	domainPrefix	string
-	port			int
+	domain 	string
+	port   	int
+	cluster cluster
 }
 
 type sandbox struct {
-	name	string
-	dev		bool
+	name       	string
+	bearerToken string
+	dev        	bool
+}
+
+func (c cluster) String() string {
+	return [...]string{"processing", "services", "monitoring"}[c]
 }
 
 func sandboxFromContext(c *cli.Context) (*sandbox, error) {
 	sandboxName := c.String("sandbox-name")
+	privateKey := c.String("private-key")
 
 	if sandboxName == "" {
 		return nil, fmt.Errorf("sandbox-name options is missing")
 	}
 
+	if privateKey == "" {
+		return nil, fmt.Errorf("private-key options is missing")
+	}
+
+	signBytes, err := ioutil.ReadFile(privateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	signKey, err := jwt.ParseRSAPrivateKeyFromPEM(signBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	bearerToken, err := generateBearerToken(sandboxName, signKey)
+	if err != nil {
+		return nil, err
+	}
+
 	return &sandbox{
-		name:	sandboxName,
-		dev:	c.Bool("dev"),
+		name:       	sandboxName,
+		bearerToken: 	bearerToken,
+		dev:        	c.Bool("dev"),
 	}, nil
 }
 
-func (service *service) listen() error {
-	router := service.router()
+func (service *service) listen(sandbox *sandbox) error {
+	router := service.router(sandbox)
 	return http.ListenAndServe(fmt.Sprintf("%s:%d", address, service.port), router)
 }
 
@@ -72,10 +110,10 @@ func initLogger(
 }
 
 func startService(service service, sandbox *sandbox, wg *sync.WaitGroup) {
-	Info.Printf("Sandbox '%s' is listening on %s:%d for " +
-		"'%s.pdok.nl' requests...\n", sandbox.name, address, service.port, service.domainPrefix)
+	Info.Printf("Sandbox '%s' is listening on %s:%d for "+
+		"'%s' requests...\n", sandbox.name, address, service.port, service.domain)
 
-	err := service.listen()
+	err := service.listen(sandbox)
 	if err != nil {
 		Error.Println(err.Error())
 	}
@@ -83,33 +121,56 @@ func startService(service service, sandbox *sandbox, wg *sync.WaitGroup) {
 	wg.Done()
 }
 
+func generateBearerToken(iss string, privateKey *rsa.PrivateKey) (string, error) {
+	Info.Println("Generating bearer token")
+
+	t := jwt.New(jwt.GetSigningMethod("RS256"))
+	t.Claims = &jwt.StandardClaims{
+		ExpiresAt: time.Now().Add(time.Hour * 24).Unix(),
+		Issuer:    iss,
+	}
+
+	return t.SignedString(privateKey)
+}
+
 func main() {
 	initLogger(ioutil.Discard, os.Stdout, os.Stdout, os.Stderr)
 
 	services := []service{
 		{
-			domainPrefix: "service",
-			port: 6443,
+			domain:		"service.pdok.nl",
+			port:   	5000,
+			cluster: 	services,
 		},
 		{
-			domainPrefix: "download",
-			port: 6444,
+			domain: 	"download.pdok.nl",
+			port:   	5001,
+			cluster: 	services,
 		},
 		{
-			domainPrefix: "api",
-			port: 6445,
+			domain: 	"api.pdok.nl",
+			port:   	5002,
+			cluster: 	services,
 		},
 		{
-			domainPrefix: "app",
-			port:         6446,
-				},
-		{
-			domainPrefix: "delivery",
-			port: 6447,
+			domain: 	"app.pdok.nl",
+			port:   	5003,
+			cluster: 	services,
 		},
 		{
-			domainPrefix: "s3.delivery",
-			port: 6448,
+			domain: 	"delivery.pdok.nl",
+			port:   	5004,
+			cluster: 	processing,
+		},
+		{
+			domain: 	"s3.delivery.pdok.nl",
+			port:   	5005,
+			cluster: 	processing,
+		},
+		{
+			domain: 	"pdok.cloud.kadaster.nl",
+			port:   	5006,
+			cluster: 	monitoring,
 		},
 	}
 
@@ -127,9 +188,14 @@ func main() {
 			Usage:  "Name of the sandbox environment",
 			EnvVar: "SANDBOX_NAME",
 		},
+		cli.StringFlag{
+			Name:   "private-key",
+			Usage:  "Reference to the private key file used to generate the public key",
+			EnvVar: "PRIVATE_KEY",
+		},
 		cli.BoolFlag{
-			Name: "dev",
-			Usage: "Set this option to true, to connect to your local development sandbox",
+			Name:   "dev",
+			Usage:  "Set this option to true, to connect to your local development sandbox",
 			EnvVar: "DEV",
 		},
 	}
