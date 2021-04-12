@@ -81,9 +81,9 @@ func sandboxFromContext(c *cli.Context) (*sandbox, error) {
 	}, nil
 }
 
-func (service *service) listen(sandbox *sandbox) error {
+func (service *service) listen(sandbox *sandbox, bindAddress string) error {
 	router := service.router(sandbox)
-	return http.ListenAndServe(fmt.Sprintf("%s:%d", address, service.port), router)
+	return http.ListenAndServe(fmt.Sprintf("%s:%d", bindAddress, service.port), router)
 }
 
 func initLogger(
@@ -109,11 +109,11 @@ func initLogger(
 		log.Ldate|log.Ltime|log.Lshortfile)
 }
 
-func startService(service service, sandbox *sandbox, wg *sync.WaitGroup) {
+func startService(service service, sandbox *sandbox, wg *sync.WaitGroup, bindAddress string) {
 	Info.Printf("Sandbox '%s' is listening on %s:%d for "+
-		"'%s' requests...\n", sandbox.name, address, service.port, service.domain)
+		"'%s' requests...\n", sandbox.name, bindAddress, service.port, service.domain)
 
-	err := service.listen(sandbox)
+	err := service.listen(sandbox, bindAddress)
 	if err != nil {
 		Error.Println(err.Error())
 	}
@@ -198,6 +198,12 @@ func main() {
 			Usage:  "Set this option to true, to connect to your local development sandbox",
 			EnvVar: "DEV",
 		},
+		cli.StringFlag{
+			Name:	"bind-address",
+			Usage:	"Bind address (default 127.0.0.1)",
+			EnvVar: "BIND_ADDRESS",
+			Value: 	address,
+		},
 	}
 
 	app.Action = func(c *cli.Context) error {
@@ -209,11 +215,13 @@ func main() {
 			return err
 		}
 
+		bindAddress := c.String("bind-address")
+
 		wg := new(sync.WaitGroup)
 		wg.Add(len(services))
 
 		for _, service := range services {
-			go startService(service, sandbox, wg)
+			go startService(service, sandbox, wg, bindAddress)
 		}
 
 		wg.Wait()
