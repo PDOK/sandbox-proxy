@@ -9,12 +9,14 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"sync"
 	"time"
 )
 
 const address = "127.0.0.1"
+const remoteUrl = "https://sandbox.pdok.nl"
 
 const (
 	processing cluster = iota
@@ -40,7 +42,7 @@ type service struct {
 type sandbox struct {
 	name       	string
 	bearerToken string
-	dev        	bool
+	remoteUrl   *url.URL
 }
 
 func (c cluster) String() string {
@@ -74,10 +76,15 @@ func sandboxFromContext(c *cli.Context) (*sandbox, error) {
 		return nil, err
 	}
 
+	remoteUrl, err := url.Parse(c.String("remote-url"))
+	if err != nil {
+		return nil, err
+	}
+
 	return &sandbox{
 		name:       	sandboxName,
 		bearerToken: 	bearerToken,
-		dev:        	c.Bool("dev"),
+		remoteUrl:      remoteUrl,
 	}, nil
 }
 
@@ -178,10 +185,8 @@ func main() {
 	app.Name = "Sandbox Proxy"
 	app.Usage = "This Sandbox Proxy is used to setup a local tunnel to the PDOK sandbox environment. " +
 		"This proxy handles both routing and security."
-
-	app.HideVersion = true
-	app.HideHelp = true
-
+	app.Version = "0.2"
+	
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:   "sandbox-name",
@@ -193,27 +198,28 @@ func main() {
 			Usage:  "Reference to the private key file used to generate the public key",
 			EnvVar: "PRIVATE_KEY",
 		},
-		cli.BoolFlag{
-			Name:   "dev",
-			Usage:  "Set this option to true, to connect to your local development sandbox",
-			EnvVar: "DEV",
+		cli.StringFlag{
+			Name:	"remote-url",
+			Usage:	fmt.Sprintf("Remote url (default %s)", remoteUrl),
+			EnvVar: "REMOTE_URL",
+			Value: 	remoteUrl,
 		},
 		cli.StringFlag{
 			Name:	"bind-address",
-			Usage:	"Bind address (default 127.0.0.1)",
+			Usage:	fmt.Sprintf("Bind address (default %s)", address),
 			EnvVar: "BIND_ADDRESS",
 			Value: 	address,
 		},
 	}
 
 	app.Action = func(c *cli.Context) error {
-		Info.Printf("Starting %s\n", app.Name)
-
 		sandbox, err := sandboxFromContext(c)
 		if err != nil {
 			cli.ShowAppHelp(c)
 			return err
 		}
+
+		Info.Printf("Starting %s\n", app.Name)
 
 		bindAddress := c.String("bind-address")
 
