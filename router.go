@@ -13,7 +13,8 @@ func (service *service) router(sandbox *sandbox) http.Handler {
 	var director func(req *http.Request)
 
 	director = func(req *http.Request) {
-		req.URL = sandbox.remoteUrl
+		req.URL.Scheme = sandbox.remoteUrl.Scheme
+		req.URL.Host = sandbox.remoteUrl.Host
 	}
 
 	proxy := &httputil.ReverseProxy{Director: director, ErrorLog: Error, ModifyResponse: func(res *http.Response) error {
