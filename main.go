@@ -16,7 +16,7 @@ import (
 )
 
 const address = "127.0.0.1"
-const remoteUrl = "https://sandbox.pdok.nl"
+const remoteUrl = "https://sandbox.test.pdok.nl"
 
 const (
 	processing cluster = iota
