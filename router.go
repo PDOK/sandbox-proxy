@@ -7,7 +7,7 @@ import (
 	"net/http/httputil"
 )
 
-func (service *service) router(sandbox *sandbox) http.Handler {
+func (service *Service) router(sandbox *Sandbox) http.Handler {
 	r := mux.NewRouter()
 
 	var director func(req *http.Request)
@@ -15,6 +15,7 @@ func (service *service) router(sandbox *sandbox) http.Handler {
 	director = func(req *http.Request) {
 		req.URL.Scheme = sandbox.remoteUrl.Scheme
 		req.URL.Host = sandbox.remoteUrl.Host
+		req.Host = sandbox.remoteUrl.Host
 	}
 
 	proxy := &httputil.ReverseProxy{Director: director, ErrorLog: Error, ModifyResponse: func(res *http.Response) error {
@@ -26,6 +27,8 @@ func (service *service) router(sandbox *sandbox) http.Handler {
 		newPath := fmt.Sprintf("/%s/%v%s", sandbox.name, service.cluster, r.URL.Path)
 
 		r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", sandbox.bearerToken))
+		r.Header.Set("Host", sandbox.remoteUrl.Host)
+		r.Header.Set("X-Forwarded-Host", fmt.Sprintf("localhost:%d", service.port))
 		r.URL.Path = newPath
 
 		Info.Println(r)

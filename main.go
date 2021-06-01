@@ -19,7 +19,7 @@ const address = "127.0.0.1"
 const remoteUrl = "https://sandbox.test.pdok.nl"
 
 const (
-	processing cluster = iota
+	processing Cluster = iota
 	services
 	monitoring
 )
@@ -31,25 +31,25 @@ var (
 	Error   *log.Logger
 )
 
-type cluster int
+type Cluster int
 
-type service struct {
-	domain 	string
-	port   	int
-	cluster cluster
+type Service struct {
+	domain  string
+	port    int
+	cluster Cluster
 }
 
-type sandbox struct {
-	name       	string
+type Sandbox struct {
+	name        string
 	bearerToken string
 	remoteUrl   *url.URL
 }
 
-func (c cluster) String() string {
+func (c Cluster) String() string {
 	return [...]string{"processing", "services", "monitoring"}[c]
 }
 
-func sandboxFromContext(c *cli.Context) (*sandbox, error) {
+func sandboxFromContext(c *cli.Context) (*Sandbox, error) {
 	sandboxName := c.String("sandbox-name")
 	privateKey := c.String("private-key")
 
@@ -81,14 +81,14 @@ func sandboxFromContext(c *cli.Context) (*sandbox, error) {
 		return nil, err
 	}
 
-	return &sandbox{
-		name:       	sandboxName,
-		bearerToken: 	bearerToken,
-		remoteUrl:      remoteUrl,
+	return &Sandbox{
+		name:        sandboxName,
+		bearerToken: bearerToken,
+		remoteUrl:   remoteUrl,
 	}, nil
 }
 
-func (service *service) listen(sandbox *sandbox, bindAddress string) error {
+func (service *Service) listen(sandbox *Sandbox, bindAddress string) error {
 	router := service.router(sandbox)
 	return http.ListenAndServe(fmt.Sprintf("%s:%d", bindAddress, service.port), router)
 }
@@ -116,7 +116,7 @@ func initLogger(
 		log.Ldate|log.Ltime|log.Lshortfile)
 }
 
-func startService(service service, sandbox *sandbox, wg *sync.WaitGroup, bindAddress string) {
+func startService(service Service, sandbox *Sandbox, wg *sync.WaitGroup, bindAddress string) {
 	Info.Printf("Sandbox '%s' is listening on %s:%d for "+
 		"'%s' requests...\n", sandbox.name, bindAddress, service.port, service.domain)
 
@@ -143,41 +143,41 @@ func generateBearerToken(iss string, privateKey *rsa.PrivateKey) (string, error)
 func main() {
 	initLogger(ioutil.Discard, os.Stdout, os.Stdout, os.Stderr)
 
-	services := []service{
+	services := []Service{
 		{
-			domain:		"service.pdok.nl",
-			port:   	5000,
-			cluster: 	services,
+			domain:  "service.pdok.nl",
+			port:    5000,
+			cluster: services,
 		},
 		{
-			domain: 	"download.pdok.nl",
-			port:   	5001,
-			cluster: 	services,
+			domain:  "download.pdok.nl",
+			port:    5001,
+			cluster: services,
 		},
 		{
-			domain: 	"api.pdok.nl",
-			port:   	5002,
-			cluster: 	services,
+			domain:  "api.pdok.nl",
+			port:    5002,
+			cluster: services,
 		},
 		{
-			domain: 	"app.pdok.nl",
-			port:   	5003,
-			cluster: 	services,
+			domain:  "app.pdok.nl",
+			port:    5003,
+			cluster: services,
 		},
 		{
-			domain: 	"delivery.pdok.nl",
-			port:   	5004,
-			cluster: 	processing,
+			domain:  "delivery.pdok.nl",
+			port:    5004,
+			cluster: processing,
 		},
 		{
-			domain: 	"s3.delivery.pdok.nl",
-			port:   	5005,
-			cluster: 	processing,
+			domain:  "s3.delivery.pdok.nl",
+			port:    5005,
+			cluster: processing,
 		},
 		{
-			domain: 	"pdok.cloud.kadaster.nl",
-			port:   	5006,
-			cluster: 	monitoring,
+			domain:  "pdok.cloud.kadaster.nl",
+			port:    5006,
+			cluster: monitoring,
 		},
 	}
 
@@ -186,7 +186,7 @@ func main() {
 	app.Usage = "This Sandbox Proxy is used to setup a local tunnel to the PDOK sandbox environment. " +
 		"This proxy handles both routing and security."
 	app.Version = "0.2"
-	
+
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:   "sandbox-name",
@@ -199,16 +199,16 @@ func main() {
 			EnvVar: "PRIVATE_KEY",
 		},
 		cli.StringFlag{
-			Name:	"remote-url",
-			Usage:	fmt.Sprintf("Remote url (default %s)", remoteUrl),
+			Name:   "remote-url",
+			Usage:  fmt.Sprintf("Remote url (default %s)", remoteUrl),
 			EnvVar: "REMOTE_URL",
-			Value: 	remoteUrl,
+			Value:  remoteUrl,
 		},
 		cli.StringFlag{
-			Name:	"bind-address",
-			Usage:	fmt.Sprintf("Bind address (default %s)", address),
+			Name:   "bind-address",
+			Usage:  fmt.Sprintf("Bind address (default %s)", address),
 			EnvVar: "BIND_ADDRESS",
-			Value: 	address,
+			Value:  address,
 		},
 	}
 
