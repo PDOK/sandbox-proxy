@@ -3,7 +3,7 @@ package main
 import (
 	"crypto/rsa"
 	"fmt"
-	"github.com/dgrijalva/jwt-go"
+	jwt "github.com/golang-jwt/jwt/v4"
 	"github.com/urfave/cli"
 	"io"
 	"io/ioutil"
@@ -17,6 +17,7 @@ import (
 
 const address = "127.0.0.1"
 const remoteUrl = "https://sandbox.test.pdok.nl"
+const defaultAuthorizationHeader = "X-PDOK-Authorization"
 
 const (
 	processing Cluster = iota
@@ -43,6 +44,7 @@ type Sandbox struct {
 	name        string
 	bearerToken string
 	remoteUrl   *url.URL
+	authHeader  string
 }
 
 func (c Cluster) String() string {
@@ -52,6 +54,7 @@ func (c Cluster) String() string {
 func sandboxFromContext(c *cli.Context) (*Sandbox, error) {
 	sandboxName := c.String("sandbox-name")
 	privateKey := c.String("private-key")
+	authHeader := c.String("authorization-header")
 
 	if sandboxName == "" {
 		return nil, fmt.Errorf("sandbox-name options is missing")
@@ -59,6 +62,10 @@ func sandboxFromContext(c *cli.Context) (*Sandbox, error) {
 
 	if privateKey == "" {
 		return nil, fmt.Errorf("private-key options is missing")
+	}
+
+	if authHeader == "" {
+		authHeader = defaultAuthorizationHeader
 	}
 
 	signBytes, err := ioutil.ReadFile(privateKey)
@@ -85,6 +92,7 @@ func sandboxFromContext(c *cli.Context) (*Sandbox, error) {
 		name:        sandboxName,
 		bearerToken: bearerToken,
 		remoteUrl:   remoteUrl,
+		authHeader:  authHeader,
 	}, nil
 }
 
@@ -132,8 +140,8 @@ func generateBearerToken(iss string, privateKey *rsa.PrivateKey) (string, error)
 	Info.Println("Generating bearer token")
 
 	t := jwt.New(jwt.GetSigningMethod("RS256"))
-	t.Claims = &jwt.StandardClaims{
-		ExpiresAt: time.Now().Add(time.Hour * 24).Unix(),
+	t.Claims = &jwt.RegisteredClaims{
+		ExpiresAt: &jwt.NumericDate{Time: time.Now().Add(time.Hour * 24)},
 		Issuer:    iss,
 	}
 

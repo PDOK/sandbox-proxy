@@ -26,7 +26,7 @@ func (service *Service) router(sandbox *Sandbox) http.Handler {
 	r.PathPrefix("/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		newPath := fmt.Sprintf("/%s/%v%s", sandbox.name, service.cluster, r.URL.Path)
 
-		r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", sandbox.bearerToken))
+		r.Header.Set(sandbox.authHeader, fmt.Sprintf("Bearer %s", sandbox.bearerToken))
 		r.Header.Set("Host", sandbox.remoteUrl.Host)
 		r.Header.Set("X-Forwarded-Host", fmt.Sprintf("localhost:%d", service.port))
 		r.URL.Path = newPath
