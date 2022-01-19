@@ -3,7 +3,7 @@ package main
 import (
 	"crypto/rsa"
 	"fmt"
-	jwt "github.com/golang-jwt/jwt/v4"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/urfave/cli"
 	"io"
 	"io/ioutil"
